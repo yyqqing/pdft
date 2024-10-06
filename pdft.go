@@ -257,6 +257,61 @@ func (i *PDFt) InsertWrapText(text string,
 	return nil
 }
 
+func (i *PDFt) InsertCenterText(text string,
+	pageNum int, x float64, y float64,
+	w float64, h float64, align int,
+	fontColor *FontColor,
+	textBreaker textbreak.TextBreaker,
+) error {
+	//textbreaker is null then use without textbreaker
+	if textBreaker == nil {
+		return i.Insert(text, pageNum, x, y, w, h, align, fontColor)
+	}
+
+	//break text
+	currentY := y
+	tokens, err := textBreaker.BreakTextToToken(text)
+	if err != nil {
+		return fmt.Errorf("BreakTextToToken %s : %w", text, err)
+	}
+
+	currText := ""
+	fontSize := float64(i.curr.fontSize)
+	newLine := fontSize * 0.2
+
+	var allLines []string
+	for _, token := range tokens {
+		if token == "" {
+			continue
+		}
+		currText += token
+		width, err := i.MeasureTextWidth(currText)
+		if err != nil {
+			return err
+		}
+		if width > w {
+			allLines = append(allLines, currText)
+			currText = ""
+		}
+	}
+	if currText != "" {
+		allLines = append(allLines, currText)
+	}
+
+	totalHeight := (fontSize+newLine)*float64(len(allLines)) - newLine
+
+	currentY = y + h/2 - totalHeight/2
+	for _, line := range allLines {
+		err = i.Insert(strings.TrimSpace(line), pageNum, x, currentY, w, h, align, fontColor)
+		if err != nil {
+			return err
+		}
+		currentY += fontSize + newLine
+	}
+
+	return nil
+}
+
 // Insert insert text in to pdf
 func (i *PDFt) Insert(text string, pageNum int, x float64, y float64, w float64, h float64, align int, fontColor *FontColor) error {
 	var ct ContentText
